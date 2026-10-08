@@ -1,0 +1,17 @@
+{
+    "QR-01": {
+        "success": false,
+        "unexpected": 1,
+        "severity": "Critical"
+    },
+    "QR-02": {
+        "success": true,
+        "unexpected": 0,
+        "severity": "Critical"
+    },
+    "QR-03": {
+        "success": true,
+        "unexpected": 0,
+        "severity": "Warning"
+    }
+}

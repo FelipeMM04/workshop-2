@@ -1,0 +1,22 @@
+{
+    "QR-04 (Uniqueness track_id)": {
+        "success": true,
+        "unexpected": 0,
+        "severity": "Critical"
+    },
+    "QR-02 (Popularity Range)": {
+        "success": true,
+        "unexpected": 0,
+        "severity": "Critical"
+    },
+    "PREP-01 (Nominated Flag)": {
+        "success": true,
+        "unexpected": 0,
+        "severity": "Critical"
+    },
+    "PREP-02 (Winner Flag)": {
+        "success": true,
+        "unexpected": 0,
+        "severity": "Critical"
+    }
+}

@@ -1,0 +1,5 @@
+great_expectations==0.18.12
+pandas==2.2.1
+sqlalchemy==2.0.28
+psycopg2-binary==2.9.9
+jupyter==1.0.0

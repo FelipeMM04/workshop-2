@@ -18,38 +18,6 @@ El objetivo analítico principal es evaluar la relación entre el desempeño com
 
 ---
 
-## 📁 Estructura del Proyecto
-
-workshop-2/
-│
-├── data/
-│   └── raw/
-│       └── spotify_dataset.csv     # Dataset crudo de Spotify
-│
-├── notebooks/
-│   └── data_profiling.ipynb        # Cuaderno reproducible de perfilamiento
-│
-├── sql/
-│   ├── source_setup.sql            # DDL para la tabla cruda raw_grammys
-│   ├── dw_schema.sql               # DDL para el esquema dimensional (music_dw)
-│   └── analytics_queries.sql       # Consultas analíticas de negocio
-│
-├── src/
-│   ├── extract_validate.py         # Extracción y validación en Gate 1
-│   ├── transform.py                # Módulo de limpieza e integración de datos
-│   ├── validate_prepared.py        # Validación de datos preparados en Gate 2
-│   ├── load.py                     # Carga al Data Warehouse (Star Schema)
-│   └── analytics.py                # Ejecución de consultas de soporte a decisiones
-│
-├── dags/
-│   └── music_dw_etl_dag.py         # Orquestador del flujo ETL en Apache Airflow
-│
-├── tests/
-│   └── test_a_successful_run.py    # Prueba de ejecución exitosa de extremo a extremo
-│
-├── docker-compose.yaml             # Configuración del contenedor de PostgreSQL
-├── requirements.txt                # Dependencias del proyecto
-└── README.md                       # Documentación técnica del proyecto
 ---
 
 

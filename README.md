@@ -292,7 +292,7 @@ El siguiente diagrama representa el esquema físico en estrella implementado en 
 erDiagram
     dim_track {
         SERIAL track_key PK
-        VARCHAR track_id BK
+        VARCHAR track_id
         VARCHAR track_name
         VARCHAR album_name
         BOOLEAN explicit
@@ -300,17 +300,17 @@ erDiagram
 
     dim_artist {
         SERIAL artist_key PK
-        VARCHAR artist_name BK
+        VARCHAR artist_name
     }
 
     dim_genre {
         SERIAL genre_key PK
-        VARCHAR genre_name BK
+        VARCHAR genre_name
     }
 
     dim_grammy_award {
         SERIAL grammy_key PK
-        VARCHAR grammy_id BK
+        VARCHAR grammy_id
         INT year
         VARCHAR category
         VARCHAR nominee

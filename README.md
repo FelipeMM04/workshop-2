@@ -282,14 +282,69 @@ El pipeline de ingesta implementa un control de calidad en dos fases obligatoria
 
 ---
 
-## 6.10 Carga del Data Warehouse y Modelado Dimensional (Data Warehouse Loading and Dimensional Modeling)
+## 6.10 Data Warehouse Loading and Dimensional Modeling
 
-### 1. Estrategia de Carga y Aislamiento del Data Warehouse
-La etapa final de carga al Data Warehouse (`load_dw` en `src/load.py`) es una fase desacoplada e independiente del proceso de ingesta inicial (`raw_grammys`). Se encarga de transformar los datos integrados y validados en el **Modelo Dimensional Kimball (Esquema en Estrella)** implementado en PostgreSQL (`music_dw`).
+### 1. Diagrama del Esquema en Estrella (Star Schema)
 
-* **Aislamiento de Capas**: La tabla `raw_grammys` actúa únicamente como zona de *staging* para la extracción cruda. La carga final escribe de manera estricta sobre las tablas dimensionales del Data Warehouse (`dim_track`, `dim_artist`, `dim_genre`, `dim_grammy_award` y `fact_music_performance`).
-* **Poblado Secuencial de Dimensiones**: Se limpian e insertan primero las tablas de dimensión generando sus respectivas Claves Sustitutas numéricas auto-incrementales (`SERIAL PRIMARY KEY`).
-* **Inserción Idempotente**: Implementa un reinicio en cascada (`TRUNCATE ... RESTART IDENTITY CASCADE`) para garantizar la repetibilidad de la ejecución sin generar duplicación de claves ni registros.
+El siguiente diagrama representa el esquema físico en estrella implementado en PostgreSQL (`music_dw`). Integra los datos validados de Spotify y Premios Grammy, vinculando la tabla de hechos con sus dimensiones mediante **llaves subrogadas** (`PK`) y **restricciones de integridad referencial** (`FK`):
+
+```mermaid
+erDiagram
+    dim_track {
+        SERIAL track_key PK
+        VARCHAR track_id BK
+        VARCHAR track_name
+        VARCHAR album_name
+        BOOLEAN explicit
+    }
+
+    dim_artist {
+        SERIAL artist_key PK
+        VARCHAR artist_name BK
+    }
+
+    dim_genre {
+        SERIAL genre_key PK
+        VARCHAR genre_name BK
+    }
+
+    dim_grammy_award {
+        SERIAL grammy_key PK
+        VARCHAR grammy_id BK
+        INT year
+        VARCHAR category
+        VARCHAR nominee
+        BOOLEAN winner
+    }
+
+    fact_music_performance {
+        SERIAL fact_key PK
+        INT track_key FK
+        INT artist_key FK
+        INT genre_key FK
+        INT grammy_key FK
+        INT popularity
+        INT duration_ms
+        FLOAT danceability
+        FLOAT energy
+        INT key
+        FLOAT loudness
+        INT mode
+        FLOAT speechiness
+        FLOAT acousticness
+        FLOAT instrumentalness
+        FLOAT liveness
+        FLOAT valence
+        FLOAT tempo
+        INT is_grammy_nominated
+        INT is_grammy_winner
+    }
+
+    fact_music_performance }|--|| dim_track : "fk_fact_track"
+    fact_music_performance }|--|| dim_artist : "fk_fact_artist"
+    fact_music_performance }|--|| dim_genre : "fk_fact_genre"
+    fact_music_performance }|--o| dim_grammy_award : "fk_fact_grammy"
+```
 
 ---
 

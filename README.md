@@ -498,3 +498,27 @@ Se ejecutó el pipeline completo de extremo a extremo utilizando un lote de dato
 ✅ [TEST A COMPLETO] El pipeline ejecutó exitosamente de extremo a extremo.
 
 ---
+
+## 7.2 Test B - Controlled Critical Quality Failure (Fallo Crítico Controlado)
+
+### 1. Descripción del Escenario de Prueba
+
+Se ejecutó la prueba de fallo controlado inyectando una anomalía en la rama de **Spotify** mediante el parámetro `force_critical_fail=True` en `src/extract_validate.py`:
+
+* **Regla Violada:** `QR-01: track_id NOT NULL` (Severidad: *Critical*).
+* **Anomalía Inyectada:** Se forzó un valor nulo (`None`) en el primer registro de la columna `track_id`.
+* **Propósito:** Verificar que el mecanismo de control Gate 1 (`validate_spotify_raw`) identifique la falla, aborte el procesamiento e impida la propagación de datos corruptos hacia la etapa de transformación y el Data Warehouse.
+
+---
+
+### 2. Matriz de Resultados Esperados vs. Obtenidos (Conceptual & Actual)
+
+| Stage | Expected Conceptual Result | Actual Result / Behavior |
+| :--- | :--- | :--- |
+| **Extract Affected Source** | **Success** | `extract_spotify()` cargó correctamente los 114,000 registros crudos. |
+| **Affected Raw Validation (Gate 1)** | **Failure** | `validate_spotify_raw()` devolvió `Success=False` en `QR-01` con 1 registro nulo no permitido. |
+| **Downstream Transformation** | **Does not proceed normally** | La bandera `sp_ok` retornó `False`, deteniendo de inmediato el paso hacia `transform.py`. |
+| **Prepared Validation & Load** | **Do not proceed normally** | La validación de Gate 2 (`validate_prepared.py`) y la carga a PostgreSQL (`load.py`) fueron omitidas por completo. |
+| **Evidence Diagnostics** | **Failure remains visible and diagnosable** | El fallo se registró explícitamente en logs de consola y se persistió en `data/metadata/spotify_raw_validation.json`. |
+
+---

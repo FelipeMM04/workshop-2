@@ -522,3 +522,31 @@ Se ejecutó la prueba de fallo controlado inyectando una anomalía en la rama de
 | **Evidence Diagnostics** | **Failure remains visible and diagnosable** | El fallo se registró explícitamente en logs de consola y se persistió en `data/metadata/spotify_raw_validation.json`. |
 
 ---
+
+## 7.3 Repeatability and Safe Rerun
+
+* **Estrategia:** *Truncate-and-Load* transaccional (`TRUNCATE ... RESTART IDENTITY CASCADE` + `conn.commit()`) previo a la inserción del lote.
+* **Mecanismo:** La tabla de hechos cuenta con la restricción `UNIQUE (track_key, artist_key, genre_key)` para garantizar la integridad a nivel de grano.
+* **Manejo de Fallas:** Ante un error parcial se dispara `conn.rollback()`, evitando que queden datos a medias en el DW.
+
+### Evidencia de Métricas (Run 1 vs. Run 2)
+
+| Tabla / Métrica | Run 1 | Run 2 (Rerun) | Estado |
+| :--- | :--- | :--- | :--- |
+| **`dim_track`** | 89,741 | 89,741 | Idempotente |
+| **`fact_music_performance`** | 89,777 | 89,777 | Sin duplicados |
+| **Suma Popularidad** | 3,012,450 | 3,012,450 | Preservada (0% variación) |
+
+---
+
+## 8. Analytics, Traceability, and Evidence
+
+### 8.1 Data Warehouse Analytics
+
+| Analytical Requirement | DW Element / Query | KPI / Visualization |
+| :--- | :--- | :--- |
+| **AR-01:** Identificar los géneros musicales con mayor rendimiento y popularidad promedio en la plataforma. | `SELECT g.genre_name, ROUND(AVG(f.popularity)::numeric, 2) AS avg_popularity FROM fact_music_performance f JOIN dim_genre g ON f.genre_key = g.genre_key GROUP BY g.genre_name ORDER BY avg_popularity DESC LIMIT 10;` | **KPI 1 (Gráfico de Barras):** Top 10 Géneros por Popularidad Promedio (`kpi1_top_genres.png`). |
+| **AR-02:** Evaluar si existe un impacto significativo en la popularidad entre canciones galardonadas con el Grammy frente a las no nominadas. | `SELECT CASE WHEN f.is_grammy_winner = 1 THEN 'Ganador Grammy' WHEN f.is_grammy_nominated = 1 THEN 'Nominado Grammy' ELSE 'Sin Nominación' END AS status_grammy, ROUND(AVG(f.popularity)::numeric, 2) AS avg_popularity FROM fact_music_performance f GROUP BY status_grammy;` | **KPI 2 (Gráfico Comparativo):** Popularidad Promedio según Estatus Grammy (`kpi2_grammy_impact.png`). |
+| **AR-03:** Determinar los artistas líderes en consumo dentro del catálogo que mantienen consistencia de mercado. | `SELECT a.artist_name, ROUND(AVG(f.popularity)::numeric, 2) AS avg_popularity FROM fact_music_performance f JOIN dim_artist a ON f.artist_key = a.artist_key WHERE a.artist_name != 'Artista Desconocido' GROUP BY a.artist_name HAVING COUNT(f.track_key) >= 5 ORDER BY avg_popularity DESC LIMIT 10;` | **KPI 3 (Gráfico de Desempeño):** Top 10 Artistas por Popularidad Promedio (`kpi3_top_artists.png`). |
+
+---

@@ -72,16 +72,6 @@ Antes de diseñar la lógica final de transformación e integración, se defini�
 
 ---
 
-### 2. Tabla de Decisiones de Diseño (Design Decision Record)
-
-| Design Decision | Required Content |
-| :--- | :--- |
-| **Business Process** | Evaluación integral del catálogo musical de Spotify analizando popularidad, características de audio y la influencia de nominaciones/premios Grammy. |
-| **Grain of the Fact Table** | Un registro por cada pista/canción única registrada en la plataforma de streaming. |
-| **Dimensions** | - `dim_track` (`track_key` PK, `track_id` BK, `track_name`, `album_name`, `explicit`) <br>- `dim_artist` (`artist_key` PK, `artist_name` BK) <br>- `dim_genre` (`genre_key` PK, `genre_name` BK) <br>- `dim_grammy_award` (`grammy_key` PK, `year`, `category`, `nominee`, `winner`) |
-| **Measures** | Popularidad (0-100), Duración (ms), Características acústicas (`danceability`, `energy`, `valence`, `tempo`, etc.) y banderas de acreditación (`is_grammy_nominated`, `is_grammy_winner`). |
-| **Keys and Relationships** | Llaves subrogadas como claves primarias autoincrementables. Restricciones de integridad referencial implícitas (`fk_fact_track`, `fk_fact_artist`, `fk_fact_genre`, `fk_fact_grammy`). |
-| **Requirement Support** | - **AR-01:** Soportado por la agregación de `popularity` sobre `dim_genre`. <br>- **AR-02:** Soportado comparando `popularity` agrupado por `is_grammy_nominated` / `is_grammy_winner`. <br>- **AR-03:** Soportado por el promedio de `popularity` agrupado por `dim_artist`. |
 
 ---
 

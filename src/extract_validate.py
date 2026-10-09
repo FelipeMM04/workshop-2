@@ -2,7 +2,6 @@ import os
 import json
 import pandas as pd
 import psycopg2
-import great_expectations as gx
 
 # Ruta para preservar metadatos de validación (Required Evidence)
 META_DIR = "data/metadata"
@@ -24,24 +23,31 @@ def validate_spotify_raw(df, force_critical_fail=False):
     print(" [SPOTIFY BRANCH] EJECUTANDO VALIDATE_SPOTIFY_RAW")
     print("="*70)
     
-    gx_df = gx.from_pandas(df)
+    # Trabajar con una copia local para la validación
+    working_df = df.copy()
     
-    # Inyección opcional para simular fallo controlado (Required Evidence)
+    # Inyección opcional para simular fallo controlado (Required Evidence - Test B)
     if force_critical_fail:
-        # Simulamos un error crítico violando QR-01 (introduciendo un nulo en track_id)
-        gx_df.iloc[0, gx_df.columns.get_loc('track_id')] = None
+        working_df.iloc[0, working_df.columns.get_loc('track_id')] = None
     
     # QR-01 (Critical): track_id NOT NULL
-    res_qr01 = gx_df.expect_column_values_to_not_be_null('track_id')
+    qr01_unexpected = int(working_df['track_id'].isna().sum())
+    res_qr01_success = (qr01_unexpected == 0)
+
     # QR-02 (Critical): popularity BETWEEN 0 AND 100
-    res_qr02 = gx_df.expect_column_values_to_be_between('popularity', min_value=0, max_value=100)
+    pop_series = working_df['popularity'].dropna()
+    qr02_unexpected = int(((pop_series < 0) | (pop_series > 100)).sum())
+    res_qr02_success = (qr02_unexpected == 0)
+
     # QR-03 (Warning): duration_ms >= 0
-    res_qr03 = gx_df.expect_column_values_to_be_between('duration_ms', min_value=0)
+    dur_series = working_df['duration_ms'].dropna()
+    qr03_unexpected = int((dur_series < 0).sum())
+    res_qr03_success = (qr03_unexpected == 0)
     
     results = {
-        "QR-01": {"success": res_qr01['success'], "unexpected": res_qr01['result']['unexpected_count'], "severity": "Critical"},
-        "QR-02": {"success": res_qr02['success'], "unexpected": res_qr02['result']['unexpected_count'], "severity": "Critical"},
-        "QR-03": {"success": res_qr03['success'], "unexpected": res_qr03['result']['unexpected_count'], "severity": "Warning"}
+        "QR-01": {"success": res_qr01_success, "unexpected": qr01_unexpected, "severity": "Critical"},
+        "QR-02": {"success": res_qr02_success, "unexpected": qr02_unexpected, "severity": "Critical"},
+        "QR-03": {"success": res_qr03_success, "unexpected": qr03_unexpected, "severity": "Warning"}
     }
     
     # Preservar metadatos de ejecución
@@ -56,10 +62,10 @@ def validate_spotify_raw(df, force_critical_fail=False):
     critical_failed = not (results['QR-01']['success'] and results['QR-02']['success'])
     if critical_failed:
         print("\n❌ [GATE SPOTIFY] BLOQUEO CRÍTICO: Se detiene el procesamiento de la rama Spotify.")
-        return False, df
+        return False, working_df
     
     print("\n✅ [GATE SPOTIFY] PASO APROBADO: Datos crudos seguros para continuar.")
-    return True, df
+    return True, working_df
 
 # ----------------------------------------------------------------------
 # RAMA 2: GRAMMY BRANCH
@@ -80,19 +86,23 @@ def validate_grammys_raw(df):
     print(" [GRAMMY BRANCH] EJECUTANDO VALIDATE_GRAMMYS_RAW")
     print("="*70)
     
-    gx_df = gx.from_pandas(df)
-    
     # QR-05a (Critical): year NOT NULL
-    res_qr05a = gx_df.expect_column_values_to_not_be_null('year')
+    qr05a_unexpected = int(df['year'].isna().sum())
+    res_qr05a_success = (qr05a_unexpected == 0)
+
     # QR-05b (Critical): year BETWEEN 1950 AND 2030
-    res_qr05b = gx_df.expect_column_values_to_be_between('year', min_value=1950, max_value=2030)
+    year_series = df['year'].dropna()
+    qr05b_unexpected = int(((year_series < 1950) | (year_series > 2030)).sum())
+    res_qr05b_success = (qr05b_unexpected == 0)
+
     # QR-06 (Critical): winner NOT NULL
-    res_qr06 = gx_df.expect_column_values_to_not_be_null('winner')
+    qr06_unexpected = int(df['winner'].isna().sum())
+    res_qr06_success = (qr06_unexpected == 0)
     
     results = {
-        "QR-05a": {"success": res_qr05a['success'], "unexpected": res_qr05a['result']['unexpected_count'], "severity": "Critical"},
-        "QR-05b": {"success": res_qr05b['success'], "unexpected": res_qr05b['result']['unexpected_count'], "severity": "Critical"},
-        "QR-06":  {"success": res_qr06['success'],  "unexpected": res_qr06['result']['unexpected_count'],  "severity": "Critical"}
+        "QR-05a": {"success": res_qr05a_success, "unexpected": qr05a_unexpected, "severity": "Critical"},
+        "QR-05b": {"success": res_qr05b_success, "unexpected": qr05b_unexpected, "severity": "Critical"},
+        "QR-06":  {"success": res_qr06_success,  "unexpected": qr06_unexpected,  "severity": "Critical"}
     }
     
     with open(f"{META_DIR}/grammy_raw_validation.json", "w") as f:

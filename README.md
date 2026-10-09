@@ -550,3 +550,16 @@ Se ejecutó la prueba de fallo controlado inyectando una anomalía en la rama de
 | **AR-03:** Determinar los artistas líderes en consumo dentro del catálogo que mantienen consistencia de mercado. | `SELECT a.artist_name, ROUND(AVG(f.popularity)::numeric, 2) AS avg_popularity FROM fact_music_performance f JOIN dim_artist a ON f.artist_key = a.artist_key WHERE a.artist_name != 'Artista Desconocido' GROUP BY a.artist_name HAVING COUNT(f.track_key) >= 5 ORDER BY avg_popularity DESC LIMIT 10;` | **KPI 3 (Gráfico de Desempeño):** Top 10 Artistas por Popularidad Promedio (`kpi3_top_artists.png`). |
 
 ---
+
+### Visualizaciones Generadas del Data Warehouse
+
+#### KPI 1: Top 10 Géneros por Popularidad Promedio
+![KPI 1 - Top Géneros](data/metadata/charts/kpi1_top_genres.png)
+
+#### KPI 2: Impacto del Estatus Grammy en la Popularidad
+![KPI 2 - Estatus Grammy](data/metadata/charts/kpi2_grammy_impact.png)
+
+#### KPI 3: Top 10 Artistas por Popularidad Promedio
+![KPI 3 - Top Artistas](data/metadata/charts/kpi3_top_artists.png)
+
+---

@@ -72,77 +72,16 @@ Antes de diseñar la lógica final de transformación e integración, se defini�
 
 ---
 
-### 2. Esquema Físico DDL del Data Warehouse (`sql/dw_schema.sql`)
+### 2. Tabla de Decisiones de Diseño (Design Decision Record)
 
-El modelo dimensional definido fue implementado en la base de datos PostgreSQL `music_dw` mediante el siguiente script DDL:
-
-```sql
--- 1. Dimensión Canción
-CREATE TABLE IF NOT EXISTS dim_track (
-    track_key SERIAL PRIMARY KEY,
-    track_id VARCHAR(100) UNIQUE NOT NULL,
-    track_name VARCHAR(500) NOT NULL,
-    album_name VARCHAR(500),
-    explicit BOOLEAN
-);
-
--- 2. Dimensión Artista
-CREATE TABLE IF NOT EXISTS dim_artist (
-    artist_key SERIAL PRIMARY KEY,
-    artist_name VARCHAR(500) UNIQUE NOT NULL
-);
-
--- 3. Dimensión Género
-CREATE TABLE IF NOT EXISTS dim_genre (
-    genre_key SERIAL PRIMARY KEY,
-    genre_name VARCHAR(100) UNIQUE NOT NULL
-);
-
--- 4. Dimensión Premios Grammy
-CREATE TABLE IF NOT EXISTS dim_grammy_award (
-    grammy_key SERIAL PRIMARY KEY,
-    grammy_id VARCHAR(100),
-    year INT NOT NULL,
-    category VARCHAR(500) NOT NULL,
-    nominee VARCHAR(500) NOT NULL,
-    winner BOOLEAN NOT NULL
-);
-
--- 5. Tabla de Hechos
-CREATE TABLE IF NOT EXISTS fact_music_performance (
-    fact_key SERIAL PRIMARY KEY,
-    track_key INT NOT NULL,
-    artist_key INT NOT NULL,
-    genre_key INT NOT NULL,
-    grammy_key INT NULL,
-    
-    -- Métricas de Spotify
-    popularity INT,
-    duration_ms INT,
-    danceability FLOAT,
-    energy FLOAT,
-    key INT,
-    loudness FLOAT,
-    mode INT,
-    speechiness FLOAT,
-    acousticness FLOAT,
-    instrumentalness FLOAT,
-    liveness FLOAT,
-    valence FLOAT,
-    tempo FLOAT,
-    
-    -- Indicadores de Premiación
-    is_grammy_nominated INT DEFAULT 0,
-    is_grammy_winner INT DEFAULT 0,
-    
-    -- Restricciones de Integridad Referencial
-    CONSTRAINT fk_fact_track FOREIGN KEY (track_key) REFERENCES dim_track(track_key),
-    CONSTRAINT fk_fact_artist FOREIGN KEY (artist_key) REFERENCES dim_artist(artist_key),
-    CONSTRAINT fk_fact_genre FOREIGN KEY (genre_key) REFERENCES dim_genre(genre_key),
-    CONSTRAINT fk_fact_grammy FOREIGN KEY (grammy_key) REFERENCES dim_grammy_award(grammy_key)
-);
-```
-
+| Design Decision | Required Content |
+| :--- | :--- |
+| **Business Process** | Evaluación integral del catálogo musical de Spotify analizando popularidad, características de audio y la influencia de nominaciones/premios Grammy. |
+| **Grain of the Fact Table** | Un registro por cada pista/canción única registrada en la plataforma de streaming. |
+| **Dimensions** | - `dim_track` (`track_key` PK, `track_id` BK, `track_name`, `album_name`, `explicit`) <br>- `dim_artist` (`artist_key` PK, `artist_name` BK) <br>- `dim_genre` (`genre_key` PK, `genre_name` BK) <br>- `dim_grammy_award` (`grammy_key` PK, `year`, `category`, `nominee`, `winner`) |
+| **Measures** | Popularidad (0-100), Duración (ms), Características acústicas (`danceability`, `energy`, `valence`, `tempo`, etc.) y banderas de acreditación (`is_grammy_nominated`, `is_grammy_winner`). |
+| **Keys and Relationships** | Llaves subrogadas como claves primarias autoincrementables. Restricciones de integridad referencial implícitas (`fk_fact_track`, `fk_fact_artist`, `fk_fact_genre`, `fk_fact_grammy`). |
+| **Requirement Support** | - **AR-01:** Soportado por la agregación de `popularity` sobre `dim_genre`. <br>- **AR-02:** Soportado comparando `popularity` agrupado por `is_grammy_nominated` / `is_grammy_winner`. <br>- **AR-03:** Soportado por el promedio de `popularity` agrupado por `dim_artist`. |
 
 ---
 

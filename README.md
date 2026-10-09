@@ -20,7 +20,6 @@ El objetivo analítico principal es evaluar la relación entre el desempeño com
 
 ## 📁 Estructura del Proyecto
 
-text
 workshop-2/
 │
 ├── data/
@@ -31,34 +30,28 @@ workshop-2/
 │   └── data_profiling.ipynb        # Cuaderno reproducible de perfilamiento
 │
 ├── sql/
-│   └── source_setup.sql            #DDL para la tabla cruda raw_grammys
+│   ├── source_setup.sql            # DDL para la tabla cruda raw_grammys
+│   ├── dw_schema.sql               # DDL para el esquema dimensional (music_dw)
+│   └── analytics_queries.sql       # Consultas analíticas de negocio
 │
 ├── src/
-│   ├── quality.py                  # Suite de validación de calidad con Great Expectations
-│   └── transform.py                # Módulo de limpieza y transformación de datos
+│   ├── extract_validate.py         # Extracción y validación en Gate 1
+│   ├── transform.py                # Módulo de limpieza e integración de datos
+│   ├── validate_prepared.py        # Validación de datos preparados en Gate 2
+│   ├── load.py                     # Carga al Data Warehouse (Star Schema)
+│   └── analytics.py                # Ejecución de consultas de soporte a decisiones
+│
+├── dags/
+│   └── music_dw_etl_dag.py         # Orquestador del flujo ETL en Apache Airflow
+│
+├── tests/
+│   └── test_a_successful_run.py    # Prueba de ejecución exitosa de extremo a extremo
 │
 ├── docker-compose.yaml             # Configuración del contenedor de PostgreSQL
 ├── requirements.txt                # Dependencias del proyecto
 └── README.md                       # Documentación técnica del proyecto
-
 ---
 
-
-### 🚀 Avances e Hitos Completados Hasta el Momento
-
-#### 1. Configuración de Entorno e Infraestructura (Secciones 4 y 5)
-- [x] **Despliegue de contenedor PostgreSQL**: Configurado y desplegado con Docker Compose en el puerto `5432`.
-- [x] **Persistencia de datos**: Implementada mediante volúmenes de Docker (`postgres_data`).
-- [x] **Ingesta inicial**: Creación de la tabla `raw_grammys` e ingesta completa de **4,810 registros** históricos.
-
-#### 2. Perfilamiento y Análisis de Riesgos de Calidad (Secciones 6.2 y 6.3)
-- [x] **Desarrollo del notebook** (`notebooks/data_profiling.ipynb`): Cubre las 7 dimensiones requeridas por la rúbrica:
-  - **Structure & Completeness**: Conteo e interpretación de nulos (1 nulo en metadata de Spotify; nulos parciales en `artist`, `workers` e `img` en Grammy).
-  - **Uniqueness & Duplication**: Detección de **24,259 registros duplicados** por `track_id` en Spotify debido a múltiples clasificaciones por género (`track_genre`).
-  - **Categorical & Numerical Content**: Verificación de rangos numéricos (`popularity` de 0 a 100, `duration_ms` $\ge 0$).
-  - **Temporal & Cross-Source Content**: Cobertura histórica en Grammy (1958–2019/2020) y evaluación de coincidencias exactas de nombres de artistas.
-
-  ---
 
   ### 📊 Matriz de Análisis de Riesgos de Calidad de Datos (Data Quality Risk Matrix)
 
@@ -74,10 +67,12 @@ workshop-2/
 ---
 
 #### 3. Validación Automatizada de Calidad con Great Expectations (Sección 6.3)
-- [x] **Creación del script `src/quality.py`**: Aplica validaciones automatizadas sobre ambas fuentes:
+- **Creación del script `src/quality.py`**: Aplica validaciones automatizadas sobre ambas fuentes:
   - **Integridad**: No nulidad en `track_id` (Spotify) y `year` (Grammy).
-  - **Rangos Numéricos**: Popularidad ($0 \le \text{popularity} \le 100$) y duración ($\text{duration\_ms} \ge 0$).
-  - **Cobertura Temporal**: Rango de años en Grammy ($1950 \le \text{year} \le 2030$).
+  - **Rangos Numéricos**: Popularidad (popularity entre 0 y 100) y duración (duration_ms >= 0).
+  - **Cobertura Temporal**: Rango de años en Grammy (year entre 1950 y 2030).
+
+---
 
 #### 4. Diseño del Modelo Dimensional (Sección 6.4)
 - [x] **Definición formal de la arquitectura bajo la metodología Kimball**:
@@ -113,7 +108,7 @@ Antes de diseñar la lógica final de transformación e integración, se defini�
 
 El modelo dimensional definido fue implementado en la base de datos PostgreSQL `music_dw` mediante el siguiente script DDL:
 
-sql
+```sql
 -- 1. Dimensión Canción
 CREATE TABLE IF NOT EXISTS dim_track (
     track_key SERIAL PRIMARY KEY,
@@ -178,6 +173,8 @@ CREATE TABLE IF NOT EXISTS fact_music_performance (
     CONSTRAINT fk_fact_genre FOREIGN KEY (genre_key) REFERENCES dim_genre(genre_key),
     CONSTRAINT fk_fact_grammy FOREIGN KEY (grammy_key) REFERENCES dim_grammy_award(grammy_key)
 );
+```
+
 
 ---
 
@@ -208,22 +205,14 @@ Se convierten los riesgos identificados durante la fase de perfilamiento en **7 
 
 ### 3. Justificación de Umbrales de Ingeniería (Threshold Engineering Rationale)
 
-Cada umbral seleccionado responde a restricciones del dominio de negocio y del modelo dimensional target, evitando la fijación arbitraria de parámetros:
+- **QR-01 (`track_id` No Nulo - 100%)**: Es la Clave de Negocio (*Business Key*). Un valor nulo rompe el grano de `dim_track` e impide generar su Clave Sustituta.
+- **QR-02 (`popularity` entre 0 y 100)**: Rango oficial de la API de Spotify; valores fuera de este límite distorsionan los promedios del Data Warehouse.
+- **QR-03 (`duration_ms` >= 0)**: Permite capturar duraciones en $0\text{ ms}$ en extracción para corregirlas o filtrarlas en transformación sin abortar el pipeline.
+- **QR-04 (0 Duplicados en `track_id` post-limpieza)**: Elimina los 24,259 duplicados multimercado para garantizar la relación 1 a N entre dimensión y hechos.
+- **QR-05 (`year` en Grammy entre 1950 y 2030)**: Protege el análisis de series de tiempo contra años corruptos o fechas futuras fuera del histórico oficial (1958+).
+- **QR-06 (0% Nulos en `artist` post-imputación)**: Evita descartar 1,840 nominaciones sin artista imputando `'Varios / No especificado'` para mantener la integridad con `dim_artist`.
+- **QR-07 (0% Huérfanos de Integridad Referencial)**: Exigencia Kimball; toda FK en `fact_music_performance` debe existir previamente en su dimensión correspondiente.
 
-* **QR-01 (`track_id` No Nulo - 100% Success)**:
-  * *Justificación*: El atributo `track_id` es la Clave de Negocio (*Business Key*) utilizada para identificar unívocamente las canciones de Spotify. Permitir un solo registro nulo quebrantaría el grano de la dimensión `dim_track` e impediría la generación de su `track_key` (Surrogate Key).
-* **QR-02 (`popularity` entre 0 y 100)**:
-  * *Justificación*: Definido por la especificación del contrato de la API de Spotify. Valores fuera de este rango denotan corrupción de datos en la fuente cruda y alterarían el cálculo de métricas agregadas (`AVG(popularity)`).
-* **QR-03 (`duration_ms` $\ge 0$)**:
-  * *Justificación*: Basado en los hallazgos del perfilamiento donde se detectaron registros con $0\text{ ms}$. Un umbral de $1\text{ ms}$ abortaba innecesariamente el pipeline frente a muestras cortas o registros por imputar. Fijar $\ge 0$ permite que la capa de extracción capture el dato y traslade la regla de limpieza a la capa de transformación.
-* **QR-04 (0 Duplicados en `track_id` post-limpieza)**:
-  * *Justificación*: En el perfilamiento se identificaron 24,259 duplicados en Spotify por pertenecer a múltiples géneros. Para garantizar la integridad del modelo en estrella (relación 1 a N entre dimensión y hechos), la capa de transformación debe garantizar $0$ duplicados antes de la carga.
-* **QR-05 (`year` en Grammy entre 1950 y 2030)**:
-  * *Justificación*: Los premios Grammy iniciaron en 1958. Un rango $[1950, 2030]$ protege la ingesta contra años corruptos (ej. valores negativos, 0 o fechas futuras inconsistentes) garantizando la validez en el análisis de series de tiempo.
-* **QR-06 (0% Nulos en `artist` post-imputación)**:
-  * *Justificación*: Existen 1,840 registros en Grammy sin artista especificado (categorías grupales o compilaciones). En lugar de descartar las nominaciones, se imputa `'Varios / No especificado'` para asegurar que el $100\%$ de los registros de hechos puedan enlazarse con la dimensión `dim_artist`.
-* **QR-07 (0% Huérfanos de Integridad Referencial)**:
-  * *Justificación*: Exigencia estricta de la metodología Kimball. Toda clave foránea (`track_key`, `artist_key`, `genre_key`) en `fact_music_performance` debe existir previamente en su respectiva tabla de dimensión.
 
 ---
 
@@ -244,22 +233,22 @@ Cada umbral seleccionado responde a restricciones del dominio de negocio y del m
 
 | Rule ID | Dataset / Layer | Attribute(s) | Expectativa de Great Expectations (GX) | Metric / Threshold | Severity |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **QR-01** | Spotify / Raw | `track_id` | `expect_column_values_to_not_be_null('track_id')` | $0\%$ Nulos (`unexpected_count = 0`) | **Critical** |
-| **QR-02** | Spotify / Raw | `popularity` | `expect_column_values_to_be_between('popularity', min_value=0, max_value=100)` | $0 \le \text{pop} \le 100$ | **Critical** |
-| **QR-03** | Spotify / Raw | `duration_ms` | `expect_column_values_to_be_between('duration_ms', min_value=0)` | $\text{duration\_ms} \ge 0$ | **Warning** |
-| **QR-05a** | Grammy / Raw | `year` | `expect_column_values_to_not_be_null('year')` | $0\%$ Nulos (`unexpected_count = 0`) | **Critical** |
-| **QR-05b** | Grammy / Raw | `year` | `expect_column_values_to_be_between('year', min_value=1950, max_value=2030)` | $1950 \le \text{year} \le 2030$ | **Critical** |
-| **QR-06** | Grammy / Raw | `winner` | `expect_column_values_to_not_be_null('winner')` | $0\%$ Nulos (`unexpected_count = 0`) | **Critical** |
+| **QR-01** | Spotify / Raw | `track_id` | `expect_column_values_to_not_be_null('track_id')` | 0% Nulos (`unexpected_count = 0`) | **Critical** |
+| **QR-02** | Spotify / Raw | `popularity` | `expect_column_values_to_be_between('popularity', min_value=0, max_value=100)` | 0 <= popularity <= 100 | **Critical** |
+| **QR-03** | Spotify / Raw | `duration_ms` | `expect_column_values_to_be_between('duration_ms', min_value=0)` | duration_ms >= 0 | **Warning** |
+| **QR-05a** | Grammy / Raw | `year` | `expect_column_values_to_not_be_null('year')` | 0% Nulos (`unexpected_count = 0`) | **Critical** |
+| **QR-05b** | Grammy / Raw | `year` | `expect_column_values_to_be_between('year', min_value=1950, max_value=2030)` | 1950 <= year <= 2030 | **Critical** |
+| **QR-06** | Grammy / Raw | `winner` | `expect_column_values_to_not_be_null('winner')` | 0% Nulos (`unexpected_count = 0`) | **Critical** |
 
 ---
 
 ### 3. Evidencia Preservada de Resultados de Validación (Validation Results Evidence)
 
 #### A. Ejecución Exitosa (Successful Execution Log)
-text
-======================================================================
+
+
  [GX EXECUTION] EVALUANDO EXPECTATION SUITE: spotify_raw_suite (SUCCESS CASE)
-======================================================================
+
 
 [Rule QR-01] track_id NOT NULL:
   - Success: True
@@ -274,9 +263,9 @@ text
   - Success: True
   - Unexpected Count: 0
 
-======================================================================
+
  [GX EXECUTION] EVALUANDO EXPECTATION SUITE: grammy_raw_suite
-======================================================================
+
 
 [Rule QR-05a] year NOT NULL:
   - Success: True
@@ -291,9 +280,8 @@ text
   - Success: True
   - Unexpected Count: 0
 
-======================================================================
+
 ✅ RESULTADO GLOBAL CHECKPOINT: SUITE COMPLETA APROBADA
-======================================================================
 
 ---
 
@@ -303,10 +291,15 @@ text
 
 El pipeline implementa dos ramas de extracción y validación aisladas e independientes antes de cualquier proceso de limpieza o integración:
 
-text
-[Rama Spotify] : extract_spotify ──> validate_spotify_raw (Gate 1) ──┐
-                                                                      ├──> [Transformación / Carga]
-[Rama Grammy]  : extract_grammys ──> validate_grammys_raw (Gate 2) ──┘
+
+       ┌─────────────────┐       ┌───────────────────────────┐
+       │ extract_spotify │ ────► │ validate_spotify_raw (G1) │ ──┐
+       └─────────────────┘       └───────────────────────────┘   │
+                                                                 ├──► [ Transformación e Integración ]
+       ┌─────────────────┐       ┌───────────────────────────┐   │
+       │ extract_grammys │ ────► │ validate_grammys_raw (G1) │ ──┘
+       └─────────────────┘       └───────────────────────────┘
+
 
 ---
 
@@ -327,7 +320,7 @@ text
 
 #### A. Estrategia de Cruce y Preprocesamiento
 
-| Item | Team Decision and Evidence |
+| Item | Decision y evidencia |
 | :--- | :--- |
 | **Integration Key(s)** | Estrategia de coincidencia en 2 capas:<br>1. **Primary Strategy (Exact Normalized Match)**: Llave compuesta trazable `clean_track_name + '||' + clean_artist_name`.<br>2. **Fallback Strategy**: Coincidencia por nombre de nominado/artista `clean_artist_name` y año de lanzamiento para piezas de catálogo. |
 | **Cardinality** | **Relación $0..1$ a $N$ (Zero-or-One to Many)**:<br>• Una canción única en `dim_track` puede no tener ningún registro en los Grammy ($0$).<br>• Una canción o artista en Spotify puede estar asociada a $1$ o múltiples nominaciones/premios Grammy históricamente ($N$). |
@@ -345,7 +338,7 @@ text
 
 ### 3. Evidencia de Transformación e Integración (Execution Evidence)
 
-text
+
 [TRANSFORM SPOTIFY] Registros limpios y deduplicados: 89,741
 [TRANSFORM GRAMMYS] Registros limpios e imputados: 4,810
 
@@ -355,17 +348,33 @@ text
 
  ---
 
- ## 6.9 Validación de Datos Preparados (Prepared Data Validation - Gate 2)
+## 6.9 Validación de Datos Preparados (Prepared Data Validation - Gate 2)
 
 ### 1. Arquitectura de Control de Dos Puertas (Two-Gate Architecture)
 
 El pipeline de ingesta implementa un control de calidad en dos fases obligatorias para garantizar la estabilidad e integridad del Data Warehouse Kimball:
 
-text
-                  Gate 1: Raw Validation                     Gate 2: Prepared Validation
-[Data Sources] ───────────► [validate_raw] ───► [Transform & Integrate] ───► [validate_prepared] ───► [load_dw]
-                                                                                      │
-                                                                             (If Critical Fail) ──► ❌ BLOCK LOAD
+```text
+                  Gate 1: Raw Validation
+                     ┌──────────────┐
+  [ Data Sources ] ─►│ validate_raw │ ─► [ Transform & Integrate ]
+                     └──────────────┘                    │
+                                                         ▼
+                                             Gate 2: Prepared Validation
+                                                ┌───────────────────┐
+                                                │ validate_prepared │
+                                                └─────────┬─────────┘
+                                                          │
+                                         ┌────────────────┴────────────────┐
+                                         │                                 │
+                                    (Passes Gate 2)                (Critical Failure)
+                                         │                                 │
+                                         ▼                                 ▼
+                                  ┌─────────────┐                  ┌──────────────┐
+                                  │   load_dw   │                  │  BLOCK LOAD  │
+                                  └─────────────┘                  └──────────────┘
+```
+
 
 ---                                                                       
 
@@ -412,3 +421,112 @@ La etapa final de carga al Data Warehouse (`load_dw` en `src/load.py`) es una fa
  -> Resolviendo Surrogate Keys para fact_music_performance...
  -> Insertando registros en fact_music_performance...
 ✅ [DW LOAD COMPLETO] Insertados 89,777 registros en fact_music_performance.
+```
+
+---
+
+## 6.11 Orquestación del Flujo de Trabajo y Confiabilidad (Workflow Orchestration and Reliability)
+
+### 1. Política de Gestión de Fallos (Failure Policy)
+
+| Condition | Severity / Type | Pipeline Response | Retry? | Justification |
+| :--- | :--- | :--- | :--- | :--- |
+| **Interrupción de Red o Conexión BD** | *Transient Operational* | Notificar advertencia y reintentar con *exponential backoff*. | **Sí** (2 reintentos, delay 30s) | Fallo de infraestructura temporal; reintentar puede resolver el problema sin alterar datos ni código. |
+| **Fallo en Validación Crítica GX (Gate 1 o Gate 2)** | *Deterministic Data / Contract* | Abortar inmediatamente el pipeline y marcar la tarea como `FAILED`. Bloquear ejecuciones *downstream*. | **No** (0 reintentos) | Reintentar con los mismos datos crudos volverá a fallar de forma idéntica. Se requiere intervención humana o corrección en origen. |
+| **Esquema de Fuente Invalidador o Columna Faltante** | *Deterministic Data / Contract* | Detener el flujo en `validate_raw`, registrar en log la columna o tipo omitido y fallar explícitamente. | **No** (0 reintentos) | Viola el contrato del esquema. Un reintento automático repetirá el error de contrato de datos. |
+
+
+---
+
+### 2. Grafo de Dependencias del DAG (Airflow Graph View)
+
+text
+  [extract_spotify] ──► [validate_raw_spotify] ──┐
+                                                 ├──► [transform_and_integrate] ──► [validate_prepared_data] ──► [load_data_warehouse]
+  [extract_grammy]  ──► [validate_raw_grammy]  ──┘
+
+---
+
+## 7. Mandatory Reliability Tests
+
+### 7.1 Test A - Successful Run
+
+Se ejecutó el pipeline completo de extremo a extremo utilizando un lote de datos de entrada que satisface todas las políticas de calidad críticas.
+
+#### Resumen de Resultados por Etapa
+
+| Stage | Expected Conceptual Result | Observed Result | Status |
+| :--- | :--- | :--- | :--- |
+| **Extract** | Extraction of both sources (`spotify` & `grammys`) | $114,000$ registros crudos de Spotify y $4,810$ registros crudos de Grammys extraídos exitosamente. | **SUCCESS** |
+| **Raw Validation Gates** | Gate 1 success under documented policy | Evaluadas las suites de datos crudos para ambos orígenes sin fallos críticos. | **SUCCESS** |
+| **Transform & Integrate** | Clean, deduplicate & integrate under contract | $89,741$ registros limpios de Spotify, $4,810$ de Grammys y $89,778$ consolidados con $272$ coincidencias. | **SUCCESS** |
+| **Prepared Validation** | Gate 2 success post-transformation | Todas las reglas de la suite preparada aprobadas (`Success=True`, `Unexpected=0`). | **SUCCESS** |
+| **Load DW** | Idempotent load to star schema | $89,777$ registros insertados en `fact_music_performance` resolviendo surrogate keys. | **SUCCESS** |
+| **Analytics Verification** | Data reflects accurately in DW | Consultas de verificación confirman $89,777$ hechos, $89,741$ tracks en dimensiones y $272$ nominaciones. | **SUCCESS** |
+
+---
+
+#### Evidencia de Ejecución en Consola (Execution Proof)
+
+
+ [TEST A: SUCCESSFUL RUN] EJECUTANDO PRUEBA DE FLUJO COMPLETO EXITOSO
+
+
+--- 1. STAGE: EXTRACTION ---
+[EXTRACT SPOTIFY] Extraídos 114,000 registros crudos.
+[EXTRACT GRAMMYS] Extraídos 4,810 registros crudos de PostgreSQL.
+ -> Spotify Raw Extracted: 114,000 filas
+ -> Grammys Raw Extracted: 4,810 filas
+
+--- 2. STAGE: RAW VALIDATION GATES (GATE 1) ---
+ -> Gate 1 Spotify: SUCCESS
+ -> Gate 1 Grammys: SUCCESS
+
+--- 3. STAGE: TRANSFORM & INTEGRATE ---
+[TRANSFORM SPOTIFY] Registros limpios y deduplicados: 89,741
+[TRANSFORM GRAMMYS] Registros limpios e imputados: 4,810
+
+[INTEGRATION] Ejecutando cruce bajo el Integration Contract...
+ -> Total registros consolidados: 89,778
+ -> Coincidencias con nominaciones Grammy: 272
+ -> Spotify Clean & Deduplicated: 89,741 filas
+ -> Grammys Clean & Imputed: 4,810 filas
+ -> Integrated Dataset Total: 89,778 filas
+
+--- 4. STAGE: PREPARED VALIDATION (GATE 2) ---
+
+
+ [GATE 2: PREPARED VALIDATION] EVALUANDO SUITE POST-TRANSFORMACIÓN
+
+ -> QR-04 (Uniqueness track_id)    : Success=True | Unexpected=0
+ -> QR-02 (Popularity Range)       : Success=True | Unexpected=0
+ -> PREP-01 (Nominated Flag)       : Success=True | Unexpected=0
+ -> PREP-02 (Winner Flag)          : Success=True | Unexpected=0
+
+✅ [GATE 2 APROBADO] Dataset preparado analíticamente listo para ejecutar load_dw.
+ -> Gate 2 Prepared Validation: SUCCESS
+
+--- 5. STAGE: DATA WAREHOUSE LOAD ---
+
+
+ [DW LOAD] INICIANDO CARGA DIMENSIONAL EN POSTGRESQL (music_dw)
+
+ -> Reiniciando tablas del modelo dimensional...
+ -> Cargando dim_track...
+ -> Cargando dim_artist...
+ -> Cargando dim_genre...
+ -> Cargando dim_grammy_award...
+ -> Resolviendo Surrogate Keys para fact_music_performance...
+ -> Insertando registros en fact_music_performance...
+✅ [DW LOAD COMPLETO] Insertados 89,777 registros en fact_music_performance.
+ -> DW Load: SUCCESS
+
+--- 6. STAGE: ANALYTICS VERIFICATION ---
+ -> Registros en fact_music_performance: 89,777
+ -> Registros en dim_track: 89,741
+ -> Canciones con Nominación Grammy en DW: 272
+
+
+✅ [TEST A COMPLETO] El pipeline ejecutó exitosamente de extremo a extremo.
+
+---

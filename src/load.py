@@ -39,7 +39,7 @@ def load_data_warehouse(df_integrated):
             TRUNCATE TABLE fact_music_performance, dim_track, dim_artist, dim_genre, dim_grammy_award 
             RESTART IDENTITY CASCADE;
         """)
-        
+
         # 2. Poblar dim_track
         print(" -> Cargando dim_track...")
         tracks_df = df_integrated[['track_id', 'track_name', 'album_name', 'explicit']].drop_duplicates(subset=['track_id'])
@@ -79,7 +79,7 @@ def load_data_warehouse(df_integrated):
                 VALUES (%s)
                 ON CONFLICT (genre_name) DO NOTHING;
             """, (g_str,))
-            
+
         # 5. Poblar dim_grammy_award
         print(" -> Cargando dim_grammy_award...")
         grammy_df = df_integrated[df_integrated['year'].notnull()][['year', 'category', 'nominee', 'winner']].drop_duplicates()
@@ -120,7 +120,7 @@ def load_data_warehouse(df_integrated):
                     safe_str(row['category'], 500, default='Sin Categoría'),
                     safe_str(row['nominee'], 500, default='Sin Nominado')
                 ))
-                
+
             if t_key and a_key and g_key:
                 fact_rows.append((
                     t_key, a_key, g_key, gr_key,
@@ -149,7 +149,7 @@ def load_data_warehouse(df_integrated):
                 liveness, valence, tempo, is_grammy_nominated, is_grammy_winner
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """, fact_rows)
-        
+
         conn.commit()
         print(f"✅ [DW LOAD COMPLETO] Insertados {len(fact_rows):,} registros en fact_music_performance.")
         return True
@@ -162,14 +162,38 @@ def load_data_warehouse(df_integrated):
         cursor.close()
         conn.close()
 
+def get_dw_metrics():
+    """Consulta métricas clave en PostgreSQL para comparar ejecuciones."""
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 
+            (SELECT COUNT(*) FROM dim_track) AS tracks_count,
+            (SELECT COUNT(*) FROM dim_artist) AS artists_count,
+            (SELECT COUNT(*) FROM fact_music_performance) AS fact_count,
+            (SELECT COALESCE(SUM(popularity), 0) FROM fact_music_performance) AS sum_popularity,
+            (SELECT COALESCE(ROUND(AVG(duration_ms)::numeric, 2), 0) FROM fact_music_performance) AS avg_duration
+    """)
+    res = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return {
+        "dim_track": res[0],
+        "dim_artist": res[1],
+        "fact_rows": res[2],
+        "sum_popularity": res[3],
+        "avg_duration": float(res[4])
+    }
+
 if __name__ == "__main__":
     from transform import transform_spotify_data, transform_grammy_data, integrate_datasets
     from validate_prepared import validate_prepared_data
     
+    # 1. Preparación de datos
     df_sp_raw = pd.read_csv("data/raw/spotify_dataset.csv")
     df_sp_clean = transform_spotify_data(df_sp_raw)
     
-    conn = psycopg2.connect(dbname="music_dw", user="postgres", password="postgres", host="localhost", port="5432")
+    conn = connect_db()
     df_gr_raw = pd.read_sql_query("SELECT * FROM raw_grammys;", conn)
     conn.close()
     
@@ -177,4 +201,32 @@ if __name__ == "__main__":
     df_integrated = integrate_datasets(df_sp_clean, df_gr_clean)
     
     if validate_prepared_data(df_integrated):
+        print("\n" + "="*70)
+        print(" [TEST 7.3] EJECUTANDO PRUEBA DE REPETIBILIDAD E IDEMPOTENCIA (SAFE RERUN)")
+        print("="*70)
+        
+        # Ejecución 1: Carga Inicial
+        print("\n--- RUN 1: CARGA INICIAL ---")
         load_data_warehouse(df_integrated)
+        metrics_run1 = get_dw_metrics()
+        
+        # Ejecución 2: Re-ejecución del mismo lote (Rerun)
+        print("\n--- RUN 2: RE-EJECUCIÓN DEL MISMO LOTE (RERUN) ---")
+        load_data_warehouse(df_integrated)
+        metrics_run2 = get_dw_metrics()
+        
+        # Comparación y Verificación
+        print("\n" + "="*70)
+        print(" [EVIDENCIA 7.3] COMPARACIÓN DE MÉTRICAS ANTES Y DESPUÉS DEL RERUN")
+        print("="*70)
+        print(f" -> Filas dim_track           : Run 1 = {metrics_run1['dim_track']:,} | Run 2 = {metrics_run2['dim_track']:,}")
+        print(f" -> Filas dim_artist          : Run 1 = {metrics_run1['dim_artist']:,} | Run 2 = {metrics_run2['dim_artist']:,}")
+        print(f" -> Filas fact_performance    : Run 1 = {metrics_run1['fact_rows']:,} | Run 2 = {metrics_run2['fact_rows']:,}")
+        print(f" -> Suma Popularidad          : Run 1 = {metrics_run1['sum_popularity']:,} | Run 2 = {metrics_run2['sum_popularity']:,}")
+        print(f" -> Promedio Duración (ms)    : Run 1 = {metrics_run1['avg_duration']:,} | Run 2 = {metrics_run2['avg_duration']:,}")
+        
+        is_idempotent = (metrics_run1 == metrics_run2)
+        if is_idempotent:
+            print("\n✅ [PRUEBA EXITOSA] Idempotencia verificada: 0% de duplicación silenciosa.")
+        else:
+            print("\n❌ [PRUEBA FALLIDA] Se detectó duplicación de registros.")

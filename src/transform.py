@@ -4,9 +4,10 @@ import numpy as np
 def transform_spotify_data(df_raw):
     """
     Aplica las transformaciones justificadas al dataset de Spotify:
-    1. Deduplicación por track_id manteniendo el registro de mayor popularidad.
-    2. Remoción de columnas redundantes.
-    3. Normalización de textos para la llave de integración.
+    1. Remoción de columnas redundantes.
+    2. Filtrado de registros inválidos (duration_ms <= 0).
+    3. Deduplicación por track_id manteniendo el registro de mayor popularidad.
+    4. Normalización de textos para la llave de integración.
     """
     df = df_raw.copy()
     
@@ -14,11 +15,14 @@ def transform_spotify_data(df_raw):
     if 'Unnamed: 0' in df.columns:
         df = df.drop(columns=['Unnamed: 0'])
         
-    # 2. Deduplicación: Ordenar por popularidad descendente y eliminar duplicados por track_id
+    # 2. Filtrar duraciones inválidas (<= 0 ms) para asegurar la regla QP-03 en Gate 2
+    df = df[df['duration_ms'] > 0].copy()
+        
+    # 3. Deduplicación: Ordenar por popularidad descendente y eliminar duplicados por track_id
     df = df.sort_values(by=['track_id', 'popularity'], ascending=[True, False])
     df = df.drop_duplicates(subset=['track_id'], keep='first')
     
-    # 3. Normalización de texto para la llave de integración
+    # 4. Normalización de texto para la llave de integración
     df['clean_track_name'] = df['track_name'].astype(str).str.strip().str.lower()
     df['clean_artist'] = df['artists'].astype(str).str.strip().str.lower()
     df['match_key'] = df['clean_track_name'] + '||' + df['clean_artist']

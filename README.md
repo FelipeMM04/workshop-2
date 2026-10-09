@@ -557,3 +557,35 @@ Se ejecutó la prueba de fallo controlado inyectando una anomalía en la rama de
 | **AR-03:** Identificar los artistas más consistentes y populares del catálogo. | `spotify_dataset.csv` <br>(`artists`, `track_id`, `duration_ms`) | Registros duplicados de canciones o duraciones de pista inválidas ($\le 0$ ms). | **QP-03:** `duration_ms` debe ser estrictamente mayor a 0. | `expect_column_values_to_be_between('duration_ms', min_value=1)` | Filtrado de `duration_ms > 0` y deduplicación conservando el registro con mayor popularidad. | `dim_artist.artist_name`, <br>`fact_music_performance.popularity` | **KPI 3:** Top 10 Artistas por Popularidad Promedio (`kpi3_top_artists.png`). |
 
 ---
+
+### Airflow DAG Diagram (`music_etl_pipeline`)
+
+A continuación se presenta el diagrama de flujo orquestado del DAG `music_etl_pipeline` implementado en `src/pipeline_dag.py`, representando las dependencias y Quality Gates entre cada una de las tareas del pipeline:
+
+```mermaid
+graph LR
+    subgraph Gate1 [" Phase 1: Ingestion & Gate 1 "]
+        E1["<b>extract_spotify_dataset</b><br/>@task | ✓ success"]
+        E2["<b>extract_grammy_db</b><br/>@task | ✓ success"]
+        V1["<b>validate_input_raw</b><br/>@task | ✓ success"]
+    end
+
+    subgraph Processing [" Phase 2: Transformation & Gate 2 "]
+        T1["<b>cleaning_and_transform</b><br/>@task | ✓ success"]
+        V2["<b>validate_output_prepared</b><br/>@task | ✓ success"]
+    end
+
+    subgraph Load [" Phase 3: DW Persistence "]
+        L1["<b>load_to_dw_postgres</b><br/>@task | ✓ success"]
+    end
+
+    E1 --> V1
+    E2 --> V1
+    V1 --> T1
+    T1 --> V2
+    V2 --> L1
+
+    classDef airflowTask fill:#0f2b1d,stroke:#00e676,stroke-width:2px,color:#ffffff,font-family:sans-serif;
+    class E1,E2,V1,T1,V2,L1 airflowTask;
+```
+---

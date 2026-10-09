@@ -563,3 +563,13 @@ Se ejecutó la prueba de fallo controlado inyectando una anomalía en la rama de
 ![KPI 3 - Top Artistas](data/metadata/charts/kpi3_top_artists.png)
 
 ---
+
+### 8.2 End-to-End Traceability Matrix
+
+| Requirement | Required Data | Quality Risk | DQ Rule | GX Expectation | Transformation | DW Element | KPI / Visualization |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **AR-01:** Analizar el rendimiento y popularidad promedio por género musical. | `spotify_dataset.csv` <br>(`track_genre`, `popularity`) | Registros nulos o géneros no estandarizados en la ingesta cruda. | **QP-02:** `popularity` no debe ser nulo. | `expect_column_values_to_not_be_null('popularity')` | Normalización de cadenas y agrupación por género con filtrado previo. | `dim_genre.genre_name`, <br>`fact_music_performance.popularity` | **KPI 1:** Top 10 Géneros por Popularidad Promedio (`kpi1_top_genres.png`). |
+| **AR-02:** Evaluar el impacto de premios Grammy en la popularidad en Spotify. | `spotify_dataset.csv` <br>(`track_name`, `artists`), <br>`raw_grammys` <br>(`nominee`, `artist`, `winner`) | Llaves con discrepancias ortográficas, espacios o diferencias en mayúsculas/minúsculas. | **QP-04:** Integridad y correspondencia de flags en {0, 1}. | `expect_column_values_to_be_in_set(['is_grammy_nominated'], [0,1])` | Creación de llave sintética `match_key` (`nominee\|\|artist`) e integración vía Left Join. | `fact_music_performance.is_grammy_nominated`, <br>`fact_music_performance.is_grammy_winner` | **KPI 2:** Popularidad Promedio según Estatus Grammy (`kpi2_grammy_impact.png`). |
+| **AR-03:** Identificar los artistas más consistentes y populares del catálogo. | `spotify_dataset.csv` <br>(`artists`, `track_id`, `duration_ms`) | Registros duplicados de canciones o duraciones de pista inválidas ($\le 0$ ms). | **QP-03:** `duration_ms` debe ser estrictamente mayor a 0. | `expect_column_values_to_be_between('duration_ms', min_value=1)` | Filtrado de `duration_ms > 0` y deduplicación conservando el registro con mayor popularidad. | `dim_artist.artist_name`, <br>`fact_music_performance.popularity` | **KPI 3:** Top 10 Artistas por Popularidad Promedio (`kpi3_top_artists.png`). |
+
+---

@@ -363,13 +363,6 @@ erDiagram
 
 ---
 
-### 2. Grafo de Dependencias del DAG (Airflow Graph View)
-
-text
-  [extract_spotify] ──► [validate_raw_spotify] ──┐
-                                                 ├──► [transform_and_integrate] ──► [validate_prepared_data] ──► [load_data_warehouse]
-  [extract_grammy]  ──► [validate_raw_grammy]  ──┘
-
 ---
 
 ## 7. Mandatory Reliability Tests

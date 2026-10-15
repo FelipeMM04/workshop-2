@@ -324,11 +324,11 @@ erDiagram
 ### 2. Mapeo de Claves Sustitutas e Integridad Referencial
 
 | Clave / Relación | Tipo de Clave | Estrategia de Mapeo y Tratamiento de Excepciones |
-| :--- | :--- | :--- |
-| **`track_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_track`. Mapeada mediante la Business Key `track_id`. Si el título o álbum vienen nulos, se imputan valores por defecto (`'Sin Título'`, `'Sin Álbum'`). |
-| **`artist_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_artist`. Mapeada mediante la Business Key `artist_name`. Nulos se reemplazan por `'Artista Desconocido'`. |
-| **`genre_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_genre`. Mapeada mediante `genre_name`. Nulos se reemplazan por `'Desconocido'`. |
-| **`grammy_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_grammy_award`. Mapeada mediante la clave compuesta `(year, category, nominee)`. Para las canciones de Spotify sin premio/nominación registrada, se inserta un valor `NULL` en la FK de la tabla de hechos, preservando la regla de integridad Kimball. |
+|---|---|---|
+| **`track_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_track`. Mapeada mediante la Business Key `track_id`. Si el título de la canción viene nulo, se imputa el valor por defecto `'Sin Título'`. |
+| **`artist_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_artist`. Mapeada mediante la Business Key `artist_name`. Valores nulos se reemplazan por `'Artista Desconocido'`. |
+| **`genre_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_genre`. Mapeada mediante `genre_name`. Valores nulos se reemplazan por `'Desconocido'`. |
+| **`grammy_key`** | Surrogate Key (PK) | Generada automáticamente en `dim_grammy_award`. Mapeada mediante la clave compuesta `(year, category, nominee)`. Para las canciones de Spotify sin premio/nominación registrada, se asigna `NULL` en la FK de la tabla de hechos, preservando la regla de integridad dimensional de Kimball. |
 
 ---
 

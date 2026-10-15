@@ -56,20 +56,6 @@ El objetivo analítico principal es evaluar la relación entre el desempeño com
 
 ---
 
-## 6.4 Diseños del Modelo Dimensional (Dimensional Model Design)
-
-### 1. Definición del Arquitectura Dimensional (Kimball)
-Antes de diseñar la lógica final de transformación e integración, se definió el modelo dimensional objetivo a partir de los requerimientos analíticos del proyecto y los datos disponibles en las fuentes origen (`spotify_dataset.csv` y `raw_grammys` en PostgreSQL).
-
-| Decisión de Diseño | Contenido Requerido | Definición de Arquitectura en el Data Warehouse |
-| :--- | :--- | :--- |
-| **Business Process** | Proceso del negocio | **Análisis de Desempeño Musical y Reconocimiento de la Industria**: Evaluación integrada de las métricas de reproducción/popularidad en plataformas de streaming junto con el historial de reconocimientos y galardones de la industria (Grammy Awards). |
-| **Grain of the Fact Table** | Grano de la tabla de hechos | **Un registro por canción única de Spotify (`track_id`), asociada a su género principal y a su estado de premiación en los Grammy (si aplica)**. |
-| **Dimensions** | Contextos analíticos descriptivos | • **`dim_track`**: Metadatos descriptivos de la canción (`track_id`, `track_name`, `album_name`, `explicit`).<br>• **`dim_artist`**: Entidad de artista (`artist_name`).<br>• **`dim_genre`**: Clasificación por género musical (`genre_name`).<br>• **`dim_grammy_award`**: Contexto del premio histórico (`year`, `category`, `nominee`, `winner`). |
-| **Measures** | Métricas numéricas o hechos | • **Métricas continuas**: `popularity` (0-100), `duration_ms` (duración en ms), `danceability`, `energy`, `loudness`, `speechiness`, `acousticness`, `instrumentalness`, `liveness`, `valence`, `tempo`.<br>• **Indicadores booleanos/contables**: `is_grammy_nominated` ($1$ / $0$), `is_grammy_winner` ($1$ / $0$). |
-| **Keys and Relationships** | Claves primarias, foráneas y estrategia de llaves | • **Surrogate Keys (Claves Sustitutas)**: Claves primarias numéricas auto-incrementales (`SERIAL PRIMARY KEY`) en todas las dimensiones (`track_key`, `artist_key`, `genre_key`, `grammy_key`).<br>• **Business Keys (Claves de Negocio)**: `track_id` (Spotify) y clave compuesta `(year, category, nominee)` (Grammy).<br>• **Foreign Keys**: `fact_music_performance` contiene las llaves foráneas hacia cada dimensión, permitiendo valores `NULL` en `grammy_key` para canciones que no tienen nominación/premio registrado. |
-| **Requirement Support** | Soporte a requerimientos analíticos | Permite realizar consultas cruzadas y agregaciones SQL para comparar atributos de audio y niveles de popularidad entre canciones ganadoras/nominadas a los Grammy vs. no nominadas, desglosadas por género y evolución temporal a lo largo de los años. |
-
 ---
 
 
@@ -286,8 +272,6 @@ El pipeline de ingesta implementa un control de calidad en dos fases obligatoria
 
 ### 1. Diagrama del Esquema en Estrella (Star Schema)
 
-El siguiente diagrama representa el esquema físico en estrella implementado en PostgreSQL (`music_dw`). Integra los datos validados de Spotify y Premios Grammy, vinculando la tabla de hechos con sus dimensiones mediante **llaves subrogadas** (`PK`) y **restricciones de integridad referencial** (`FK`):
-
 ```mermaid
 erDiagram
     dim_track {
@@ -325,17 +309,6 @@ erDiagram
         INT grammy_key FK
         INT popularity
         INT duration_ms
-        FLOAT danceability
-        FLOAT energy
-        INT key
-        FLOAT loudness
-        INT mode
-        FLOAT speechiness
-        FLOAT acousticness
-        FLOAT instrumentalness
-        FLOAT liveness
-        FLOAT valence
-        FLOAT tempo
         INT is_grammy_nominated
         INT is_grammy_winner
     }

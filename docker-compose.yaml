@@ -3,19 +3,98 @@ services:
     image: postgres:15-alpine
     container_name: postgres_music_db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB:-music_dw}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/source_setup.sql:/docker-entrypoint-initdb.d/10-source_setup.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-music_dw}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - etl_network
+
+  airflow-init:
+    image: apache/airflow:2.7.1-python3.10
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init && \
+        airflow users create \
+          --username airflow \
+          --password airflow \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    volumes:
+      - airflow_data:/opt/airflow
+    networks:
+      - etl_network
+
+  airflow-webserver:
+    image: apache/airflow:2.7.1-python3.10
+    container_name: airflow_webserver
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - DB_HOST=postgres
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./src:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - airflow_data:/opt/airflow
+    command: webserver
+    networks:
+      - etl_network
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1-python3.10
+    container_name: airflow_scheduler
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - DB_HOST=postgres
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./src:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+      - airflow_data:/opt/airflow
+    command: scheduler
+    networks:
+      - etl_network
 
 volumes:
   postgres_data:
+  airflow_data:
+
+networks:
+  etl_network:
+    driver: bridge

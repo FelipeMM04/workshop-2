@@ -174,14 +174,16 @@ El pipeline ejecuta 5 reglas críticas de calidad organizadas en dos puertas de 
 
 El pipeline implementa dos ramas de extracción y validación aisladas e independientes antes de cualquier proceso de limpieza o integración:
 
-
-       ┌─────────────────┐       ┌───────────────────────────┐
-       │ extract_spotify │ ────► │ validate_spotify_raw (G1) │ ──┐
-       └─────────────────┘       └───────────────────────────┘   │
-                                                                 ├──► [ Transformación e Integración ]
-       ┌─────────────────┐       ┌───────────────────────────┐   │
-       │ extract_grammys │ ────► │ validate_grammys_raw (G1) │ ──┘
-       └─────────────────┘       └───────────────────────────┘
+```text
+  ┌─────────────────────────┐
+  │ extract_spotify_dataset │ ──┐
+  └─────────────────────────┘   │
+                                ├──► ┌────────────────────┐      ┌────────────────────────┐      ┌─────────────────────────┐      ┌──────────────────────┐
+                                │    │ validate_input_raw │ ───► │ cleaning_and_transform │ ───► │ validate_output_prepared│ ───► │ load_to_postgres_dw  │
+  ┌─────────────────────────┐   │    └────────────────────┘      └────────────────────────┘      └─────────────────────────┘      └──────────────────────┘
+  │    extract_grammy_db    │ ──┘         (Gate 1)                                                        (Gate 2)
+  └─────────────────────────┘
+  ```
 
 
 ---

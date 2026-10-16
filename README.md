@@ -38,7 +38,7 @@ El objetivo analítico principal es evaluar la relación entre el desempeño com
 - **Creación del script `src/quality.py`**: Aplica validaciones automatizadas sobre ambas fuentes:
   - **Integridad**: No nulidad en `track_id` (Spotify) y `year` (Grammy).
   - **Rangos Numéricos**: Popularidad (popularity entre 0 y 100) y duración (duration_ms >= 0).
-  - **Cobertura Temporal**: Rango de años en Grammy (year entre 1950 y 2030).
+  - **Cobertura Temporal**: Rango de años en Grammy (year entre 1958 y 2030).
 
 ---
 
@@ -120,7 +120,7 @@ El pipeline ejecuta 5 reglas críticas de calidad organizadas en dos puertas de 
 | **QR-02** | Spotify / Raw | `popularity` | `expect_column_values_to_be_between('popularity', min_value=0, max_value=100)` | 0 <= popularity <= 100 | **Critical** |
 | **QR-03** | Spotify / Raw | `duration_ms` | `expect_column_values_to_be_between('duration_ms', min_value=0)` | duration_ms >= 0 | **Warning** |
 | **QR-05a** | Grammy / Raw | `year` | `expect_column_values_to_not_be_null('year')` | 0% Nulos (`unexpected_count = 0`) | **Critical** |
-| **QR-05b** | Grammy / Raw | `year` | `expect_column_values_to_be_between('year', min_value=1950, max_value=2030)` | 1950 <= year <= 2030 | **Critical** |
+| **QR-05b** | Grammy / Raw | `year` | `expect_column_values_to_be_between('year', min_value=1958, max_value=2030)` | 1958 <= year <= 2030 | **Critical** |
 | **QR-06** | Grammy / Raw | `winner` | `expect_column_values_to_not_be_null('winner')` | 0% Nulos (`unexpected_count = 0`) | **Critical** |
 
 ---
@@ -155,7 +155,7 @@ El pipeline ejecuta 5 reglas críticas de calidad organizadas en dos puertas de 
   - Element Count: 4,810
   - Unexpected Count: 0
 
-[Rule QR-05b] year BETWEEN 1950 AND 2030:
+[Rule QR-05b] year BETWEEN 1958 AND 2030:
   - Success: True
   - Unexpected Count: 0
 

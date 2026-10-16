@@ -67,15 +67,15 @@ Se convierten los riesgos identificados durante la fase de perfilamiento en **7 
 
 ### 1. Matriz de Reglas de Calidad (Data Quality Rules Matrix)
 
-| Rule ID | Dataset / Layer | Attribute(s) | Quality Dimension | Quality Rule | Metric / Threshold | Severity | Related Requirement |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **QR-01** | Spotify / Raw | `track_id` | **Completeness** | No deben existir registros con identificador principal nulo o vacío. | $0\%$ Nulos ($\text{Success} = 100\%$) | **Critical** | Identificación unívoca de entidades en dimensiones y llaves foráneas. |
-| **QR-02** | Spotify / Raw | `popularity` | **Validity** | El índice de popularidad debe estar en el rango válido de la API de Spotify. | $0 \le \text{popularity} \le 100$ | **Critical** | Precisión en agregaciones y comparaciones de rendimiento comercial. |
-| **QR-03** | Spotify / Raw | `duration_ms` | **Validity** | La duración de la canción en milisegundos debe ser un número no negativo. | $\text{duration\_ms} \ge 0$ | **Warning** | Evitar métricas atípicas o registros con errores de muestreo en streaming. |
-| **QR-04** | Spotify / Clean | `track_id` | **Uniqueness** | Garantizar que el grano de la tabla limpia no tenga IDs de canción duplicados. | $0$ duplicados tras deduplicación por mayor popularidad. | **Critical** | Prevención de duplicación de métricas al cargar la tabla de hechos. |
-| **QR-05** | Grammy / Raw | `year` | **Completeness / Validity** | El año del premio debe ser no nulo y dentro del periodo de premiaciones históricas. | No nulo y $1950 \le \text{year} \le 2030$ | **Critical** | Integridad del análisis temporal y filtrado por décadas. |
-| **QR-06** | Grammy / Clean | `artist` | **Completeness** | Tratar registros de artistas ausentes para mantener la integridad referencial. | $0\%$ nulos post-imputación (`'Varios / No especificado'`). | **Warning** | Evitar pérdidas de filas al realizar el *join* con `Dim_Artist`. |
-| **QR-07** | Integrated / DW | `track_key`, `artist_key`, `genre_key` | **Integrity** | Las claves foráneas en la tabla de hechos no deben romper la integridad con dimensiones. | $0\%$ de huérfanos sin correspondencia en las dimensiones. | **Critical** | Integridad referencial del Modelo Dimensional Kimball. |
+El pipeline ejecuta 5 reglas críticas de calidad organizadas en dos puertas de control (**Gate 1: Raw Validation** y **Gate 2: Prepared Validation**):
+
+| Rule ID | Dataset / Layer | Attribute(s) | Quality Dimension | Quality Rule / Threshold | Severity | Related Requirement |
+|---|---|---|---|---|---|---|
+| **QR-01** | Spotify / Raw | `track_id` | Completeness | Identificador principal no nulo (`track_id NOT NULL`). | **Critical** | Identificación unívoca de entidades en dimensiones y llaves foráneas. |
+| **QR-02** | Spotify / Raw | `popularity` | Validity | Índice de popularidad en el rango oficial (`0 <= popularity <= 100`). | **Critical** | Precisión en agregaciones y comparaciones de rendimiento comercial. |
+| **QR-03** | Grammy / Raw | `year` | Validity / Temporal | Año del premio dentro del periodo histórico oficial (`year >= 1958`). | **Critical** | Integridad del análisis temporal y filtrado por décadas. |
+| **QR-04** | Spotify / Clean | `(artist_name, track_name)` | Uniqueness | Ausencia de registros duplicados tras estandarización (Deduplicación por mayor popularidad). | **Critical** | Prevención de duplicación de métricas en la tabla de hechos. |
+| **QR-05** | Integrated / DW | `track_key`, `artist_key`, `genre_key`, `grammy_key` | Integrity | Integridad referencial: Las FKs en la tabla de hechos deben existir en sus dimensiones. | **Critical** | Integridad referencial del Modelo Dimensional Kimball. |
 
 ---
 
